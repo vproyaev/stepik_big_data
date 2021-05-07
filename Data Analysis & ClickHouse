@@ -1,0 +1,224 @@
+-- 1.
+select
+    date,
+    count(event) all_events,
+    countIf(event = 'view') all_views,
+    countIf(event = 'click') all_clicks,
+    uniqExact(ad_id) uniq_ad,
+    uniqExact(campaign_union_id) uniq_campaign
+from ads_data
+group by date
+limit 10;
+
+
+
+-- 2.
+-- Скачок случился из-за выросшего числа просмотров и кликов.
+-- Число просмотров увеличелось у некоторых объявлений, а число кликов у 1.
+
+with (select avg(views) from (
+    select ad_id, countIf(event = 'view') as views from ads_data
+    group by ad_id)
+    ) as avg_views
+
+select ad_id,
+    countIf(event = 'view') all_views,
+    countIf(event = 'click') all_clicks
+from ads_data
+where date = '2019-04-05'
+group by ad_id
+having all_views > avg_views
+order by all_views desc, all_clicks limit 5;
+-- Тут видно что стало больше просмотров и кликов
+with (select avg(views) from (
+    select date, countIf(event = 'view') as views from ads_data
+    group by date)
+    ) as avg_views
+select date,
+    countIf(event = 'view') all_views,
+    countIf(event = 'click') all_clicks
+from ads_data
+group by date
+having all_views > avg_views
+order by all_views desc;
+
+
+
+-- 3.
+-- Тут топ 10 CTR
+select
+       ad_id,
+       round(countIf(event = 'click') / countIf(event = 'view'), 3) as CTR
+from ads_data
+group by ad_id
+having CTR between 0 and 1
+order by CTR desc limit 10;
+
+-- Тут среднее и медиана и их различие.
+-- С уверенностью можно сказать что медиана и среднее различаются.
+select
+       round(avg(CTR), 3) as avg,
+       medianExact(CTR) as median,
+       round(abs(avg - median), 3) as diff
+from (
+     select
+       round(countIf(event = 'click') / countIf(event = 'view'), 3) as CTR
+from ads_data
+group by ad_id
+having CTR between 0 and 1
+order by CTR desc
+         );
+
+
+
+-- 4.
+-- Я вижу закономерность в том, что у этих 9 объявление нет видео, так же это в основном у тех объявлений, тип оплаты у которых - CPM.
+select ad_id,
+       has_video,
+       ad_cost_type,
+       arraySort(arrayDistinct(groupArray(platform))) as platforms,
+       arraySort(arrayDistinct(groupArray(event))) as events
+from ads_data
+group by ad_id, has_video, ad_cost_type
+having events[1] == 'click' and length(events) == 1
+order by ad_cost_type desc;
+
+
+
+--- 5.
+-- Конечно есть различия, по цифрам они явно видны.
+with (
+    select
+       round(countIf(event = 'click') / countIf(event = 'view'), 3) as CTR_with_video
+from ads_data
+where has_video = 0
+having 1 <= CTR_with_video <= 0
+order by CTR_with_video desc
+    ) as CTR_no_video
+
+select CTR_with_video, CTR_no_video, abs(CTR_with_video - CTR_no_video) as diff from
+    (
+        select
+               round(countIf(event = 'click') / countIf(event = 'view'), 3) as CTR_with_video
+        from ads_data
+        where has_video = 1
+        having 1 <= CTR_with_video <= 0
+        order by CTR_with_video desc
+    );
+-- Тут можно видеть чему равен 95 процентиль.
+select
+    round(median(0.95)(CTR), 3) as `95 procentil`
+from (
+     select
+       round(countIf(event = 'click') / countIf(event = 'view'), 3) as CTR
+from ads_data
+where date = '2019-04-04'
+group by ad_id
+having 1 <= CTR <= 0
+order by CTR desc
+         );
+
+
+
+-- 6.
+-- 2019-04-05 заработали больше всего. Заработали меньше всего: 2019-04-06 по CPC, 2019-04-01 по CPM.
+-- Заработок по CPC
+with (
+    select date, round(sum(profit), 1) as day_profit
+from (
+     select date,
+       ad_id,
+       count(ad_id) * ad_cost as profit
+from ads_data
+where event = 'click' and ad_cost_type = 'CPC'
+group by ad_id, date, ad_cost
+         )
+group by date
+order by day_profit desc
+limit 1
+    ) as max_day_profit
+
+select date, round(sum(profit), 1) as min_day_profit, max_day_profit
+from (
+     select date,
+       ad_id,
+       count(ad_id) * ad_cost as profit
+from ads_data
+where event = 'click' and ad_cost_type = 'CPC'
+group by ad_id, date, ad_cost
+         )
+group by date
+order by min_day_profit
+limit 1;
+
+-- Заработок по CPM
+with (
+    select date, round(sum(profit), 1) as day_profit
+from (
+     select date,
+       ad_id,
+       ad_cost / 1000 as profit
+from ads_data
+where event = 'view' and ad_cost_type = 'CPM'
+group by ad_id, date, ad_cost
+         )
+group by date
+order by day_profit desc
+limit 1
+    ) as max_day_profit
+
+select date, round(sum(profit), 1) as min_day_profit, max_day_profit
+from (
+     select date,
+       ad_id,
+       ad_cost / 1000 as profit
+from ads_data
+where event = 'view' and ad_cost_type = 'CPM'
+group by ad_id, date, ad_cost
+         )
+group by date
+order by min_day_profit
+limit 1;
+
+
+
+
+-- 7.
+-- На android больше всего показов. Android - 50.035%, ios - 29.985%, web - 19.98%.
+with (
+    select
+       countIf(event = 'view') views
+from ads_data
+    ) as all_views
+
+select arraySort(arrayDistinct(groupArray(platform))) as platforms,
+       countIf(event = 'view') as views,
+       round(views / all_views * 100, 3) as `%`
+from ads_data
+group by platform
+order by views desc
+limit 3;
+
+
+
+
+-- 8.
+-- Таких объявлений - 12.
+select  ad_id,
+       formatDateTime(time_click, '%T') as time_click,
+       formatDateTime(time_view, '%T') as time_view
+from (
+      select min(time) as time_click,
+             ad_id
+      from ads_data
+      where event = 'click'
+      group by ad_id
+         ) c
+join (
+    select min(time) as time_view,
+    ad_id as ad_id
+from ads_data
+where event = 'view'
+group by ad_id
+    ) v on c.ad_id = v.ad_id
+where c.time_click < v.time_view
