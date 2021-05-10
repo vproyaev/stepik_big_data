@@ -121,64 +121,28 @@ order by CTR desc
 
 
 -- 6.
--- 2019-04-05 заработали больше всего. Заработали меньше всего: 2019-04-06 по CPC, 2019-04-01 по CPM.
--- Заработок по CPC
-with (
-    select date, round(sum(profit), 1) as day_profit
+-- 2019-04-05 Заработали больше всего.
+-- 2019-04-06 Заработали меньше всего.
+select date, round(CPM_profit + CPC_profit) as profit
 from (
-     select date,
-       ad_id,
-       count(ad_id) * ad_cost as profit
-from ads_data
-where event = 'click' and ad_cost_type = 'CPC'
-group by ad_id, date, ad_cost
-         )
-group by date
-order by day_profit desc
-limit 1
-    ) as max_day_profit
+         select date,
+                sumIf(ad_cost / 1000, ad_cost_type = 'CPM' and event = 'view') as CPM_profit
+         from ads_data
+         group by date
+         order by CPM_profit
+         ) as a
+JOIN (
+    select date, clicks * ad_cost as CPC_profit
+    from (
+          select date,
+                 countIf(ad_id, ad_cost_type = 'CPC' and event = 'click') as clicks,
+                 sumIf(ad_cost, ad_cost_type = 'CPC' and event = 'click') as ad_cost
 
-select date, round(sum(profit), 1) as min_day_profit, max_day_profit
-from (
-     select date,
-       ad_id,
-       count(ad_id) * ad_cost as profit
-from ads_data
-where event = 'click' and ad_cost_type = 'CPC'
-group by ad_id, date, ad_cost
-         )
-group by date
-order by min_day_profit
-limit 1;
-
--- Заработок по CPM
-with (
-    select date, round(sum(profit), 1) as day_profit
-from (
-     select date,
-       ad_id,
-       ad_cost / 1000 as profit
-from ads_data
-where event = 'view' and ad_cost_type = 'CPM'
-group by ad_id, date, ad_cost
-         )
-group by date
-order by day_profit desc
-limit 1
-    ) as max_day_profit
-
-select date, round(sum(profit), 1) as min_day_profit, max_day_profit
-from (
-     select date,
-       ad_id,
-       ad_cost / 1000 as profit
-from ads_data
-where event = 'view' and ad_cost_type = 'CPM'
-group by ad_id, date, ad_cost
-         )
-group by date
-order by min_day_profit
-limit 1;
+          from ads_data
+          group by date
+             )
+    ) as b ON a.date = b.date
+order by profit
 
 
 
@@ -222,3 +186,13 @@ where event = 'view'
 group by ad_id
     ) v on c.ad_id = v.ad_id
 where c.time_click < v.time_view
+
+-- Второе решение, с использование функции argMin
+-- Тут в дополнении попались багованные, которые исключились из 1 решения.
+select ad_id
+from (
+      select argMin(event, time) as ev, ad_id
+      from ads_data
+      group by ad_id
+      having ev == 'click'
+         )
