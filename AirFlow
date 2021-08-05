@@ -1,0 +1,147 @@
+1. Создайте DAG c идентификатором: dummy_dag в переменной dag. Дату начала выполнения start_date укажите как dag_start_date (уже определенная переменная). 
+Создайте и назначьте в DAG один DummyOperator с task_id: dummy_operator1.
+
+	from airflow.models import DAG
+	from airflow.operators.dummy_operator import DummyOperator
+
+	dag = DAG(dag_id='dummy_dag',
+						start_date=dag_start_date,
+						schedule_interval='@once')
+
+	t1 = DummyOperator(task_id='dummy_operator1', dag=dag)
+
+2. Создайте DAG c идентификатором: dummy_dag в переменной dag. Дату начала выполнения start_date укажите как dag_start_date. 
+Создайте и назначьте в DAG три DummyOperator с task_id: dummy_operator1, dummy_operator2, dummy_operator3.
+И определите следующий порядок выполнения: dummy_operator1 -> dummy_operator2 -> dummy_operator3
+
+	from airflow.models import DAG
+	from airflow.operators.dummy_operator import DummyOperator
+
+	dag = DAG(dag_id='dummy_dag',
+						start_date=dag_start_date,
+						schedule_interval='@once')
+
+	t1 = DummyOperator(task_id='dummy_operator1', dag=dag)
+	t2 = DummyOperator(task_id='dummy_operator2', dag=dag)
+	t3 = DummyOperator(task_id='dummy_operator3', dag=dag)
+
+	t1 >> t2
+	t2 >> t3
+
+3. Создайте DAG c идентификатором: task_dag в переменной dag. Дату начала выполнения start_date укажите как dag_start_date.
+Создайте и назначьте в DAG пять DummyOperator с task_id: task1, task2, task3, task4, task5.
+
+	from airflow.models import DAG
+	from airflow.operators.dummy_operator import DummyOperator
+
+	dag = DAG(dag_id='task_dag',
+						start_date=dag_start_date,
+						schedule_interval='@once')
+
+	t1 = DummyOperator(task_id='task1', dag=dag)
+	t2 = DummyOperator(task_id='task2', dag=dag)
+	t3 = DummyOperator(task_id='task3', dag=dag)
+	t4 = DummyOperator(task_id='task4', dag=dag)
+	t5 = DummyOperator(task_id='task5', dag=dag)
+
+	t1 >> t4 >> t5
+	t1 >> t2 >> t3 >> t5
+
+4. Создайте DAG c идентификатором: hi_dag в переменной dag, установите дату начала выполнения как 30-11-2019.
+Создайте и назначьте в DAG PythonOperator с task_id: task1. Задача должна вызывать функцию с именем hello, который возвращает фразу "Hello world!".
+
+	from airflow.models import DAG
+	from airflow.operators.python_operator import PythonOperator
+
+	def hello():
+			return 'Hello world!'
+
+	dag = DAG(dag_id='hi_dag',
+						start_date=datetime(2019, 11, 30),
+						schedule_interval='@once')
+
+	t1 = PythonOperator(task_id='task1', python_callable=hello, dag=dag)
+
+	t1
+
+5. Создайте DAG c идентификатором: prepare_dag в переменной dag, установите дату начала выполнения как 21-11-2019.
+Создайте и назначьте в DAG три BashOperator с task_id: init, prepare_train, prepare_test.
+init - вызывает bash-скрипт /usr/bin/init.sh
+prepare_train - вызывает bash-скрипт /usr/bin/prepare_train.sh
+prepare_test - вызывает bash-скрипт /usr/bin/prepare_test.sh
+
+	from airflow.models import DAG
+	from airflow.operators.bash_operator import BashOperator
+
+	def hello():
+			return 'Hello world!'
+
+	dag = DAG(dag_id='prepare_dag',
+						start_date=datetime(2019, 11, 21),
+						schedule_interval='@once')
+
+	t1 = BashOperator(task_id='init', bash_command='/usr/bin/init.sh', dag=dag)
+	t2 = BashOperator(task_id='prepare_train', bash_command='/usr/bin/prepare_train.sh', dag=dag)
+	t3 = BashOperator(task_id='prepare_test', bash_command='/usr/bin/prepare_test.sh', dag=dag)
+
+	t1 >> t2
+	t1 >> t3
+	
+6. Создайте DAG c идентификатором: task_dag в переменной dag. Дату начала выполнения укажите как 30-12-2019.
+Создайте и назначьте в DAG пять DummyOperator с task_id: task1, task2, task3, task4, task5.
+
+	from airflow.models import DAG
+	from airflow.operators.dummy_operator import DummyOperator
+	from airflow.utils.trigger_rule import TriggerRule
+
+	dag = DAG(dag_id='task_dag',
+						start_date=datetime(2019, 12, 30),
+						schedule_interval='@once')
+
+	t1 = DummyOperator(task_id='task1', dag=dag)
+	t2 = DummyOperator(task_id='task2', dag=dag)
+	t3 = DummyOperator(task_id='task3', dag=dag)
+	t4 = DummyOperator(task_id='task4', dag=dag)
+	t5 = DummyOperator(task_id='task5', dag=dag, trigger_rule=TriggerRule.ONE_SUCCESS)
+
+	t1 >> t2 >> t5
+	t1 >> t3 >> t5
+	t1 >> t4 >> t5
+	
+7. Создайте DAG c идентификатором: trigger_dag в переменной dag, установите дату начала выполнения как 01-12-2019,
+а в расписании '@once'.
+Создайте и назначьте в DAG два TriggerDagRunOperator с task_id: trigger_job1, trigger_job2, так что:
+trigger_job1 - вызывает job1_dag DAG.
+trigger_job2 - вызывает job2_dag DAG.
+И обе эти задачи выполняются параллельно.
+
+	from airflow.models import DAG
+	from airflow.operators.dagrun_operator import TriggerDagRunOperator
+
+	dag = DAG(dag_id='trigger_dag',
+						start_date=datetime(2019, 12, 1),
+						schedule_interval='@once')
+
+	t1 = TriggerDagRunOperator(task_id='trigger_job1', trigger_dag_id='job1_dag', dag=dag)
+	t2 = TriggerDagRunOperator(task_id='trigger_job2', trigger_dag_id='job2_dag', dag=dag)
+
+
+	t1
+	t2
+	
+8. Создайте DAG c идентификатором: spark_submit_dag в переменной dag.
+Дату начала выполнения start_date укажите как 1-12-2019 и ежедневное выполнение по расписанию '@daily'. 
+Создайте и назначьте в DAG один SparkSubmitOperator с task_id: spark_submit,
+который будет запускать Spark приложение из файла PySparkJob.py с аргументами input.csv и output.csv,
+используя соединение 'spark_default'.
+
+	from airflow.models import DAG
+	from airflow.contrib.operators.spark_submit_operator import SparkSubmitOperator
+
+	dag = DAG(dag_id='spark_submit_dag',
+						start_date=datetime(2019, 12, 1),
+						schedule_interval='@daily')
+
+	t1 = SparkSubmitOperator(task_id='spark_submit', dag=dag, application='PySparkJob.py', application_args=['input.csv','output.csv'], env_vars='spark_default')
+
+	t1
